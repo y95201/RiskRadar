@@ -22,7 +22,7 @@ class VideoController extends Controller
             'width' => 'integer|min:256|max:1920',
             'height' => 'integer|min:256|max:1920',
             'num_frames' => 'integer|min:9|max:441',
-            'frame_rate' => 'integer|min:1|max:60',
+            'frame_rate' => 'numeric|min:1|max:60',
             'num_inference_steps' => 'integer|min:1|max:100',
             'seed' => 'integer',
             'negative_prompt' => 'string',

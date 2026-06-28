@@ -33,6 +33,8 @@ class GenerateVideoJob implements ShouldQueue
             $requestBody = [
                 'model' => 'agnes-video-v2.0',
                 'prompt' => $task->prompt,
+                'height' => $params['height'] ?? 768,
+                'width' => $params['width'] ?? 1152,
                 'num_frames' => $params['num_frames'] ?? 121,
                 'frame_rate' => $params['frame_rate'] ?? 24,
             ];
@@ -43,12 +45,44 @@ class GenerateVideoJob implements ShouldQueue
             if (isset($params['seed'])) {
                 $requestBody['seed'] = $params['seed'];
             }
+            if (isset($params['num_inference_steps'])) {
+                $requestBody['num_inference_steps'] = $params['num_inference_steps'];
+            }
 
             $mode = $params['mode'] ?? 't2v';
             $imageUrls = $params['image_urls'] ?? [];
 
-            if ($mode !== 't2v' && !empty($imageUrls)) {
-                $requestBody['image'] = $imageUrls[0];
+            switch ($mode) {
+                case 'i2v':
+                    if (!empty($imageUrls)) {
+                        if (count($imageUrls) === 1) {
+                            $requestBody['image'] = $imageUrls[0];
+                        } else {
+                            $requestBody['image'] = $imageUrls;
+                        }
+                    }
+                    break;
+
+                case 'multi':
+                    if (!empty($imageUrls)) {
+                        $requestBody['extra_body'] = [
+                            'image' => $imageUrls,
+                        ];
+                    }
+                    break;
+
+                case 'keyframes':
+                    if (!empty($imageUrls)) {
+                        $requestBody['extra_body'] = [
+                            'image' => $imageUrls,
+                            'mode' => 'keyframes',
+                        ];
+                    }
+                    break;
+
+                case 't2v':
+                default:
+                    break;
             }
 
             $response = Http::withHeaders([
@@ -61,15 +95,15 @@ class GenerateVideoJob implements ShouldQueue
             }
 
             $responseData = $response->json();
-            $agnesTaskId = $responseData['task_id'] ?? null;
+            $videoId = $responseData['video_id'] ?? null;
 
-            if (! $agnesTaskId) {
-                throw new \Exception('未获取到 Agnes 任务 ID');
+            if (! $videoId) {
+                throw new \Exception('未获取到 Agnes 视频 ID');
             }
 
-            $task->markAsProcessing($agnesTaskId);
+            $task->markAsProcessing($videoId);
 
-            $this->pollAgnesStatus($task, $agnesTaskId);
+            $this->pollAgnesStatus($task, $videoId);
         } catch (\Exception $e) {
             Log::error('视频生成任务失败', [
                 'task_id' => $task->id,
@@ -81,7 +115,7 @@ class GenerateVideoJob implements ShouldQueue
         }
     }
 
-    protected function pollAgnesStatus(VideoTask $task, string $agnesTaskId): void
+    protected function pollAgnesStatus(VideoTask $task, string $videoId): void
     {
         $maxAttempts = 36;
         $attempt = 0;
@@ -92,12 +126,14 @@ class GenerateVideoJob implements ShouldQueue
             try {
                 $response = Http::withHeaders([
                     'Authorization' => 'Bearer ' . config('services.agnes.api_key'),
-                ])->get(config('services.agnes.api_url') . '/videos/' . $agnesTaskId);
+                ])->get('https://apihub.agnes-ai.com/agnesapi', [
+                    'video_id' => $videoId,
+                ]);
 
                 if (! $response->successful()) {
                     Log::warning('查询 Agnes 任务状态失败', [
                         'task_id' => $task->id,
-                        'agnes_task_id' => $agnesTaskId,
+                        'video_id' => $videoId,
                         'status' => $response->status(),
                     ]);
 
@@ -110,7 +146,7 @@ class GenerateVideoJob implements ShouldQueue
 
                 switch ($status) {
                     case 'completed':
-                        $videoUrl = $responseData['video_url'] ?? null;
+                        $videoUrl = $responseData['remixed_from_video_id'] ?? null;
 
                         if ($videoUrl) {
                             $task->markAsCompleted($videoUrl);
@@ -121,7 +157,8 @@ class GenerateVideoJob implements ShouldQueue
                         return;
 
                     case 'failed':
-                        $errorMessage = $responseData['error_message'] ?? '未知错误';
+                        $errorData = $responseData['error'] ?? null;
+                        $errorMessage = is_array($errorData) ? json_encode($errorData) : ($errorData ?? '未知错误');
                         $task->markAsFailed($errorMessage);
 
                         return;
@@ -132,7 +169,7 @@ class GenerateVideoJob implements ShouldQueue
             } catch (\Exception $e) {
                 Log::error('轮询 Agnes 状态时发生异常', [
                     'task_id' => $task->id,
-                    'agnes_task_id' => $agnesTaskId,
+                    'video_id' => $videoId,
                     'error' => $e->getMessage(),
                 ]);
 
