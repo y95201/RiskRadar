@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'agnes' => [
+        'api_url' => env('AGNES_API_URL', env('AGNES_API_BASE', 'https://apihub.agnes-ai.com/v1')),
+        'api_key' => env('AGNES_API_KEY'),
+    ],
+
 ];

@@ -10,6 +10,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\OfferGuardController;
+use App\Http\Controllers\VideoController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -39,3 +40,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // 获取配额状态（支持未登录用户）
 Route::get('/quota/status', [OfferGuardController::class, 'getQuotaStatus']);
+
+/*
+|--------------------------------------------------------------------------
+| Video Generation API Routes
+|--------------------------------------------------------------------------
+|
+| 视频生成平台API接口，需要用户登录认证
+|
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/videos', [VideoController::class, 'store']);
+    Route::get('/videos/{task}', [VideoController::class, 'show']);
+    Route::post('/videos/upload', [VideoController::class, 'uploadImage']);
+});

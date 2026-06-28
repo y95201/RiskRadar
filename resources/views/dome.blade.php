@@ -488,9 +488,7 @@
 
     <script>
         (function() {
-            // DOM refs
             const form = document.getElementById('generationForm');
-            const apiKeyInput = document.getElementById('apiKey') || { value: '' }; // 兼容已移除的情况
             const modeSelect = document.getElementById('mode');
             const imageInput = document.getElementById('imageInput');
             const previewContainer = document.getElementById('previewContainer');
@@ -516,156 +514,132 @@
             const imageLabel = document.getElementById('imageLabel');
             const imageHint = document.getElementById('imageHint');
 
-            let uploadedFiles = []; // 存储 File 对象
+            let uploadedFiles = [];
             let currentTaskId = null;
-            let currentVideoId = null;
+            let currentIdempotencyKey = null;
             let pollInterval = null;
             let isGenerating = false;
-            let lastErrorDetail = null; // 存储错误详情
-            let pendingTaskInfo = null; // 进行中的任务信息
 
-            // ----- 任务管理：检查是否有进行中的任务 -----
-            async function checkPendingTask() {
-                try {
-                    const resp = await fetch('/api/video/task/check');
-                    const data = await resp.json();
-                    
-                    if (data.success && data.has_pending_task) {
-                        pendingTaskInfo = data.task;
-                        
-                        // 显示任务信息
-                        resultArea.style.display = 'block';
-                        taskIdDisplay.textContent = pendingTaskInfo.task_id || '—';
-                        statusDisplay.textContent = '继续轮询中...';
-                        currentTaskId = pendingTaskInfo.task_id;
-                        currentVideoId = pendingTaskInfo.video_id;
-                        
-                        // 显示提示
-                        errorDisplay.innerHTML = `
-                            <div style="background: rgba(42,157,255,0.15); padding: 12px; border-radius: 8px; margin-bottom: 10px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">⚠️ 有任务正在进行中</div>
-                                <div style="font-size: 13px;">
-                                    <p>任务 ID: ${pendingTaskInfo.task_id}</p>
-                                    <p>提示词: ${pendingTaskInfo.prompt.substring(0, 50)}...</p>
-                                    <p>创建时间: ${pendingTaskInfo.created_at}</p>
-                                </div>
-                                <div style="margin-top: 8px; font-size: 13px; color: var(--text2);">
-                                    系统正在自动查询任务状态，完成后将显示视频结果。
-                                </div>
-                            </div>
-                        `;
-                        errorDisplay.style.display = 'block';
-                        
-                        // 禁用生成按钮
-                        generateBtn.disabled = true;
-                        generateBtn.innerHTML = '<i class="fas fa-clock"></i> 等待任务完成...';
-                        isGenerating = true;
-                        
-                        // 开始轮询
-                        if (pollInterval) clearInterval(pollInterval);
-                        pollInterval = setInterval(() => pollTaskStatus(currentVideoId), 3000);
-                        pollTaskStatus(currentVideoId);
-                        
-                        return true;
-                    }
-                    return false;
-                } catch (err) {
-                    console.error('检查任务失败:', err);
-                    return false;
+            function getAuthHeaders() {
+                const token = localStorage.getItem('sanctum_token');
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) {
+                    headers['Authorization'] = 'Bearer ' + token;
                 }
+                return headers;
             }
 
-            // ----- 任务管理：通过后端查询任务状态 -----
-            async function pollTaskStatus(videoId) {
+            async function checkPendingTask() {
+                const savedTaskId = sessionStorage.getItem('pending_task_id');
+                const savedKey = sessionStorage.getItem('idempotency_key');
+                
+                if (savedTaskId) {
+                    try {
+                        const resp = await fetch(`/api/videos/${savedTaskId}`, {
+                            headers: getAuthHeaders(),
+                        });
+                        
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            if (data.status === 'pending' || data.status === 'processing') {
+                                currentTaskId = savedTaskId;
+                                currentIdempotencyKey = savedKey;
+                                
+                                resultArea.style.display = 'block';
+                                taskIdDisplay.textContent = currentTaskId;
+                                statusDisplay.textContent = '继续轮询中...';
+                                
+                                generateBtn.disabled = true;
+                                generateBtn.innerHTML = '<i class="fas fa-clock"></i> 等待任务完成...';
+                                isGenerating = true;
+                                
+                                if (pollInterval) clearInterval(pollInterval);
+                                pollInterval = setInterval(() => pollTaskStatus(currentTaskId), 5000);
+                                await pollTaskStatus(currentTaskId);
+                                
+                                return true;
+                            } else if (data.status === 'completed') {
+                                displayVideoResult(data);
+                            } else if (data.status === 'failed') {
+                                showError(data.error_message || '任务失败');
+                            }
+                            
+                            sessionStorage.removeItem('pending_task_id');
+                            sessionStorage.removeItem('idempotency_key');
+                        }
+                    } catch (err) {
+                        console.error('检查任务失败:', err);
+                    }
+                }
+                return false;
+            }
+
+            async function pollTaskStatus(taskId) {
                 try {
-                    const resp = await fetch(`/api/video/task/status?video_id=${videoId}`);
-                    const data = await resp.json();
+                    const resp = await fetch(`/api/videos/${taskId}`, {
+                        headers: getAuthHeaders(),
+                    });
                     
-                    if (!data.success) {
+                    if (!resp.ok) {
                         statusDisplay.textContent = '查询失败';
                         return;
                     }
                     
-                    const task = data.task;
-                    const status = task.status;
+                    const data = await resp.json();
+                    const status = data.status;
                     
                     statusDisplay.textContent = status;
                     
                     if (status === 'completed') {
                         clearInterval(pollInterval);
                         pollInterval = null;
-                        
-                        // 优先使用 Agnes API 返回的 remixed_from_video_id
-                        const videoUrl = task.result_url 
-                            || data.remixed_from_video_id 
-                            || data.video_url 
-                            || null;
-                        
-                        if (videoUrl) {
-                            videoResult.innerHTML = `
-                                <video controls autoplay loop style="max-width: 100%; border-radius: 12px;">
-                                    <source src="${videoUrl}" type="video/mp4">
-                                </video>
-                                <div style="margin-top: 10px; text-align: center;">
-                                    <a href="${videoUrl}" download class="btn btn-primary">
-                                        <i class="fas fa-download"></i> 下载视频
-                                    </a>
-                                </div>
-                            `;
-                        } else {
-                            videoResult.innerHTML = `
-                                <div style="padding: 20px; text-align: center; color: var(--text2);">
-                                    <i class="fas fa-check-circle" style="font-size: 48px; color: #22c55e; margin-bottom: 10px;"></i>
-                                    <p>视频生成完成</p>
-                                    <p style="font-size: 13px;">video_id: ${videoId}</p>
-                                </div>
-                            `;
-                        }
-                        statusDisplay.textContent = '✅ 已完成';
-                        errorDisplay.style.display = 'none';
-                        
-                        // 重置按钮
+                        displayVideoResult(data);
+                        sessionStorage.removeItem('pending_task_id');
+                        sessionStorage.removeItem('idempotency_key');
                         resetAfterDone();
-                        pendingTaskInfo = null;
-                        return;
                     } else if (status === 'failed') {
                         clearInterval(pollInterval);
-                        showError('任务失败: ' + (task.error_message || '未知错误'));
+                        pollInterval = null;
+                        showError(data.error_message || '生成失败');
+                        sessionStorage.removeItem('pending_task_id');
+                        sessionStorage.removeItem('idempotency_key');
                         resetAfterDone();
-                        pendingTaskInfo = null;
+                    } else {
+                        progressFill.style.width = '50%';
+                        progressPercent.textContent = '50%';
                     }
                 } catch (err) {
                     console.error('轮询失败:', err);
                 }
             }
 
-            // ----- 任务管理：保存任务信息到后端 -----
-            async function saveTaskInfo(taskId, videoId, prompt, mode, numFrames, frameRate) {
-                try {
-                    const resp = await fetch('/api/video/task/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            task_id: taskId,
-                            video_id: videoId,
-                            prompt: prompt,
-                            mode: mode,
-                            num_frames: numFrames,
-                            frame_rate: frameRate,
-                        }),
-                    });
-                    
-                    const data = await resp.json();
-                    console.log('任务已保存:', data);
-                } catch (err) {
-                    console.error('保存任务失败:', err);
+            function displayVideoResult(data) {
+                if (data.video_url) {
+                    videoResult.innerHTML = `
+                        <div class="result-video">
+                            <video controls autoplay loop>
+                                <source src="${data.video_url}" type="video/mp4" />
+                                您的浏览器不支持视频播放。
+                            </video>
+                        </div>
+                        <p style="margin-top:8px;font-size:14px;color:var(--text2);">
+                            <i class="fas fa-link"></i> <a href="${data.video_url}" target="_blank">直接打开视频</a>
+                        </p>
+                    `;
+                } else {
+                    videoResult.innerHTML = `
+                        <div style="padding: 20px; text-align: center; color: var(--text2);">
+                            <i class="fas fa-check-circle" style="font-size: 48px; color: #22c55e; margin-bottom: 10px;"></i>
+                            <p>视频生成完成</p>
+                        </div>
+                    `;
                 }
+                statusDisplay.textContent = '✅ 已完成';
+                errorDisplay.style.display = 'none';
             }
 
-            // 页面加载时检查是否有进行中的任务
             checkPendingTask();
 
-            // ----- 提示词模板按钮 -----
             document.querySelectorAll('.prompt-template-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const template = this.dataset.template;
@@ -673,20 +647,16 @@
                 });
             });
 
-            // ----- 视频时长快速选择 -----
             const durationBtns = document.querySelectorAll('.duration-btn');
             
             function setActiveDuration(btn) {
-                // 移除所有按钮的激活状态
                 durationBtns.forEach(b => {
                     b.style.cssText = 'background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 8px 16px; font-size: 14px;';
                     b.classList.remove('active');
                 });
-                // 激活当前按钮
                 btn.style.cssText = 'background: #2a9dff; border: 1px solid #2a9dff; color: #fff; padding: 8px 16px; font-size: 14px;';
                 btn.classList.add('active');
                 
-                // 设置参数
                 const frames = btn.dataset.frames;
                 const rate = btn.dataset.rate;
                 document.getElementById('numFrames').value = frames;
@@ -699,11 +669,9 @@
                 });
             });
             
-            // 默认激活 5 秒选项
             const defaultBtn = document.querySelector('.duration-btn[data-frames="121"]');
             if (defaultBtn) setActiveDuration(defaultBtn);
 
-            // ----- 自定义时长滑块 -----
             const customDurationSlider = document.getElementById('customDurationSlider');
             const customDurationValue = document.getElementById('customDurationValue');
             const customDurationFrames = document.getElementById('customDurationFrames');
@@ -718,13 +686,11 @@
                 if (customDurationValue) customDurationValue.textContent = duration.toFixed(1) + '秒';
                 if (customDurationFrames) customDurationFrames.textContent = frames;
                 
-                // 同步更新 numFrames 输入框
                 const numFramesInput = document.getElementById('numFrames');
                 const frameRateInput = document.getElementById('frameRate');
                 if (numFramesInput) numFramesInput.value = frames;
                 if (frameRateInput) frameRateInput.value = frameRate;
                 
-                // 移除快速选择按钮的激活状态
                 document.querySelectorAll('.duration-btn').forEach(b => {
                     b.style.cssText = 'background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 8px 16px; font-size: 14px;';
                     b.classList.remove('active');
@@ -733,11 +699,9 @@
 
             if (customDurationSlider) {
                 customDurationSlider.addEventListener('input', updateCustomDuration);
-                // 初始化
                 updateCustomDuration();
             }
 
-            // ----- 图片预览管理 -----
             function updatePreview() {
                 previewContainer.innerHTML = '';
                 uploadedFiles.forEach((file, index) => {
@@ -753,7 +717,6 @@
                         div.querySelector('.remove').addEventListener('click', function() {
                             const idx = parseInt(this.dataset.index);
                             uploadedFiles.splice(idx, 1);
-                            // 更新 input.files
                             const dt = new DataTransfer();
                             uploadedFiles.forEach(f => dt.items.add(f));
                             imageInput.files = dt.files;
@@ -770,7 +733,6 @@
                 updatePreview();
             });
 
-            // 提示词模板
             const promptTemplates = {
                 t2v: 'A cinematic shot with beautiful lighting, realistic motion, high quality',
                 i2v: 'The subject slowly moves with natural motion, cinematic camera movement, realistic details',
@@ -778,7 +740,6 @@
                 keyframes: 'Create a smooth transition from the first keyframe to the second keyframe, maintaining character identity, consistent camera angle, and natural motion between scenes'
             };
 
-            // ----- 模式切换 -----
             function updateModeUI() {
                 const mode = modeSelect.value;
                 if (mode === 't2v') {
@@ -808,7 +769,6 @@
                         document.getElementById('promptHint').textContent = '描述关键帧之间的过渡关系、角色一致性、相机角度、场景过渡';
                     }
                 }
-                // 清空已有文件
                 uploadedFiles = [];
                 imageInput.value = '';
                 updatePreview();
@@ -816,7 +776,6 @@
             modeSelect.addEventListener('change', updateModeUI);
             updateModeUI();
 
-            // ----- 清空 -----
             clearBtn.addEventListener('click', function() {
                 form.reset();
                 uploadedFiles = [];
@@ -832,17 +791,22 @@
                 isGenerating = false;
                 generateBtn.disabled = false;
                 generateBtn.innerHTML = '<i class="fas fa-play"></i> 生成视频';
-                // 重置模式UI
                 updateModeUI();
             });
 
-            // ----- 上传图片到服务器获取 URL -----
             async function uploadImage(file) {
                 const formData = new FormData();
                 formData.append('image', file);
                 
-                const resp = await fetch('/api/video/upload', {
+                const token = localStorage.getItem('sanctum_token');
+                const headers = {};
+                if (token) {
+                    headers['Authorization'] = 'Bearer ' + token;
+                }
+                
+                const resp = await fetch('/api/videos/upload', {
                     method: 'POST',
+                    headers: headers,
                     body: formData,
                 });
                 
@@ -852,58 +816,12 @@
                 }
                 
                 const data = await resp.json();
-                
-                // 服务器已返回完整 URL，直接使用
                 return data.url;
             }
 
-            // ----- 读取文件为纯 Base64 (不含前缀) -----
-            function readFileAsBase64(file) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        // e.target.result 是 data:image/...;base64,xxxx
-                        const base64 = e.target.result.split(',')[1];
-                        if (!base64) {
-                            reject(new Error('无法提取 Base64 数据'));
-                            return;
-                        }
-                        // 移除所有空白字符（换行、空格等），防止 padding 问题
-                        const clean = base64.replace(/\s/g, '');
-                        resolve(clean);
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-            }
-
-            // ----- 简化的 fetch 封装 -----
-            async function fetchOnce(url, options) {
-                try {
-                    statusDisplay.textContent = `提交中...`;
-                    const response = await fetch(url, options);
-                    return response;
-                } catch (err) {
-                    throw new Error(`网络请求失败: ${err.message}`);
-                }
-            }
-
-            // ----- 主提交 -----
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 if (isGenerating) return;
-
-                // 先检查是否有进行中的任务
-                if (pendingTaskInfo) {
-                    alert('有任务正在进行中，请等待完成后再生成新视频。\n任务 ID: ' + pendingTaskInfo.task_id);
-                    return;
-                }
-
-                // 再次检查（防止页面刷新后状态丢失）
-                const hasPending = await checkPendingTask();
-                if (hasPending) {
-                    return;
-                }
 
                 const prompt = promptInput.value.trim();
                 if (!prompt) {
@@ -920,7 +838,6 @@
                     return;
                 }
 
-                // 禁用按钮
                 isGenerating = true;
                 generateBtn.disabled = true;
                 generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
@@ -932,159 +849,99 @@
                 progressFill.style.width = '0%';
                 progressPercent.textContent = '0%';
 
-                // 构建请求体
-                const requestBody = {
-                    model: 'agnes-video-v2.0',
-                    prompt: prompt,
-                    height: parseInt(heightInput.value) || 768,
-                    width: parseInt(widthInput.value) || 1152,
-                    num_frames: parseInt(numFramesInput.value) || 121,
-                    frame_rate: parseFloat(frameRateInput.value) || 24,
-                    num_inference_steps: parseInt(inferenceStepsInput.value) || 30,
-                };
-                if (negativeInput.value) {
-                    requestBody.negative_prompt = negativeInput.value;
-                }
-                if (seedInput.value) {
-                    requestBody.seed = parseInt(seedInput.value);
-                }
+                const idempotencyKey = crypto.randomUUID();
+                currentIdempotencyKey = idempotencyKey;
 
-                // 处理图片：先上传到服务器获取 URL
                 try {
+                    const imageUrls = [];
+                    
                     if (mode !== 't2v') {
                         statusDisplay.textContent = '上传图片中...';
                         
-                        if (mode === 'i2v') {
-                            // 单图
-                            const file = uploadedFiles[0];
-                            const imageUrl = await uploadImage(file);
-                            requestBody.image = imageUrl;
-                        } else {
-                            // multi 或 keyframes
-                            const imageUrls = [];
-                            for (const file of uploadedFiles) {
-                                const url = await uploadImage(file);
-                                imageUrls.push(url);
-                            }
-                            requestBody.extra_body = {
-                                image: imageUrls,
-                            };
-                            if (mode === 'keyframes') {
-                                requestBody.extra_body.mode = 'keyframes';
-                            }
+                        for (const file of uploadedFiles) {
+                            const url = await uploadImage(file);
+                            imageUrls.push(url);
                         }
                     }
-                    
+
                     statusDisplay.textContent = '提交任务...';
 
-                    // 调用后端API创建视频
-                    const createUrl = '/api/video/create';
-                    const createResp = await fetchOnce(createUrl, {
+                    const requestBody = {
+                        prompt: prompt,
+                        idempotency_key: idempotencyKey,
+                        mode: mode,
+                        width: parseInt(widthInput.value) || 1152,
+                        height: parseInt(heightInput.value) || 768,
+                        num_frames: parseInt(numFramesInput.value) || 121,
+                        frame_rate: parseFloat(frameRateInput.value) || 24,
+                        num_inference_steps: parseInt(inferenceStepsInput.value) || 30,
+                    };
+
+                    if (negativeInput.value) {
+                        requestBody.negative_prompt = negativeInput.value;
+                    }
+                    if (seedInput.value) {
+                        requestBody.seed = parseInt(seedInput.value);
+                    }
+                    if (imageUrls.length > 0) {
+                        requestBody.image_urls = imageUrls;
+                    }
+
+                    const resp = await fetch('/api/videos', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: getAuthHeaders(),
                         body: JSON.stringify(requestBody),
                     });
 
-                    // 处理特殊错误（如 503）
-                    if (createResp.status === 503) {
-                        const detailMsg = createResp.errorDetail || '服务繁忙，当前有任务正在处理';
-                        lastErrorDetail = detailMsg;
-                        
-                        // 检测是否是"任务队列已满"错误
-                        const isQueueFull = detailMsg.includes('tasks:') || detailMsg.includes('Service busy');
-                        
+                    if (resp.status === 409) {
+                        const data = await resp.json();
                         errorDisplay.innerHTML = `
-                            <div style="margin-bottom: 10px;">
-                                <strong>❌ 服务繁忙 (503)</strong>
+                            <div style="background: rgba(42,157,255,0.15); padding: 12px; border-radius: 8px;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">⚠️ ${data.error}</div>
+                                <div style="font-size: 13px;">
+                                    <p>任务 ID: ${data.task_id}</p>
+                                </div>
                             </div>
-                            ${isQueueFull ? `
-                            <div style="background: rgba(255,107,74,0.15); padding: 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">⚠️ 检测到账户已有任务在队列中</div>
-                                <div>错误信息：${detailMsg}</div>
-                            </div>
-                            <div style="font-size: 13px;">
-                                <strong>解决方法：</strong>
-                                <ol style="margin: 8px 0 0 20px; line-height: 1.8;">
-                                    <li>登录 <a href="https://agnes-ai.com" target="_blank" style="color: var(--accent);">Agnes AI 平台</a></li>
-                                    <li>进入"我的任务"或"任务历史"</li>
-                                    <li>取消或等待当前正在执行的任务</li>
-                                    <li>任务完成后，再点击"生成视频"</li>
-                                </ol>
-                            </div>
-                            ` : `
-                            <div style="margin-top: 8px; font-size: 13px;">
-                                ${detailMsg.replace(/\n/g, '<br/>')}
-                            </div>
-                            <div style="margin-top: 10px; font-size: 13px;">
-                                💡 建议：等待 1-2 分钟后重试
-                            </div>
-                            `}
                         `;
                         errorDisplay.style.display = 'block';
-                        resetAfterDone();
+                        
+                        currentTaskId = data.task_id;
+                        sessionStorage.setItem('pending_task_id', currentTaskId);
+                        sessionStorage.setItem('idempotency_key', idempotencyKey);
+                        
+                        if (pollInterval) clearInterval(pollInterval);
+                        pollInterval = setInterval(() => pollTaskStatus(currentTaskId), 5000);
+                        await pollTaskStatus(currentTaskId);
                         return;
                     }
 
-                    if (!createResp.ok) {
-                        let errMsg = `创建任务失败 (${createResp.status})`;
+                    if (!resp.ok) {
+                        let errMsg = `创建任务失败 (${resp.status})`;
                         try {
-                            const errJson = await createResp.json();
-                            
-                            // 友好化错误提示
-                            if (createResp.status === 401) {
-                                errMsg = '❌ API Key 无效或已过期，请检查';
-                            } else if (createResp.status === 402) {
-                                errMsg = '❌ 余额不足，请充值后重试';
-                            } else if (createResp.status === 429) {
-                                errMsg = '❌ 请求过于频繁，请稍后再试';
+                            const errJson = await resp.json();
+                            if (resp.status === 401) {
+                                errMsg = '❌ 请先登录';
                             } else {
-                                errMsg += `: ${JSON.stringify(errJson)}`;
+                                errMsg += `: ${errJson.error || JSON.stringify(errJson)}`;
                             }
                         } catch (_) {
-                            const errText = await createResp.text();
+                            const errText = await resp.text();
                             errMsg += `: ${errText}`;
                         }
                         throw new Error(errMsg);
                     }
 
-                    const createData = await createResp.json();
-                    const taskId = createData.task_id || createData.id;
-                    const videoId = createData.video_id;
-                    
-                    // 如果没有 video_id 且没有 task_id，说明创建失败
-                    if (!taskId && !videoId) {
-                        throw new Error('创建任务失败：API 未返回任务 ID');
-                    }
-                    
-                    currentTaskId = taskId;
-                    currentVideoId = videoId;
-                    taskIdDisplay.textContent = taskId || '—';
+                    const data = await resp.json();
+                    currentTaskId = data.task_id;
+                    taskIdDisplay.textContent = currentTaskId;
                     statusDisplay.textContent = '已提交';
 
-                    // 如果有 video_id 才保存任务和轮询
-                    if (videoId) {
-                        // 保存任务信息到后端
-                        await saveTaskInfo(
-                            taskId,
-                            videoId,
-                            prompt,
-                            mode,
-                            parseInt(numFramesInput.value) || 121,
-                            parseFloat(frameRateInput.value) || 24
-                        );
+                    sessionStorage.setItem('pending_task_id', currentTaskId);
+                    sessionStorage.setItem('idempotency_key', idempotencyKey);
 
-                        // 开始轮询（通过后端API）
-                        if (pollInterval) clearInterval(pollInterval);
-                        pollInterval = setInterval(() => pollTask(videoId), 2000);
-                        // 立即轮询一次
-                        await pollTask(videoId);
-                    } else {
-                        // 只有 task_id，没有 video_id 的情况
-                        statusDisplay.textContent = '已提交（无 video_id，请手动查询）';
-                        resetAfterDone();
-                    }
+                    if (pollInterval) clearInterval(pollInterval);
+                    pollInterval = setInterval(() => pollTaskStatus(currentTaskId), 5000);
+                    await pollTaskStatus(currentTaskId);
 
                 } catch (err) {
                     console.error(err);
@@ -1093,72 +950,6 @@
                 }
             });
 
-            // ----- 轮询（通过后端API）-----
-            async function pollTask(videoId) {
-                if (!videoId) {
-                    statusDisplay.textContent = '无 video_id，无法查询';
-                    return;
-                }
-                
-                try {
-                    // 调用后端API查询任务状态
-                    const resp = await fetch(`/api/video/task/status?video_id=${encodeURIComponent(videoId)}`);
-                    const data = await resp.json();
-                    
-                    if (!data.success) {
-                        statusDisplay.textContent = '查询失败';
-                        return;
-                    }
-                    
-                    const task = data.task;
-                    const status = task.status;
-                    const progress = task.progress || 0;
-
-                    statusDisplay.textContent = status || 'unknown';
-                    progressFill.style.width = `${progress}%`;
-                    progressPercent.textContent = `${progress}%`;
-
-                    if (status === 'completed') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        const videoUrl = task.result_url || data.agnes_response?.remixed_from_video_id;
-                        if (videoUrl) {
-                            videoResult.innerHTML = `
-                                <div class="result-video">
-                                    <video controls autoplay loop>
-                                        <source src="${videoUrl}" type="video/mp4" />
-                                        您的浏览器不支持视频播放。
-                                    </video>
-                                </div>
-                                <p style="margin-top:8px;font-size:14px;color:var(--text2);">
-                                    <i class="fas fa-link"></i> <a href="${videoUrl}" target="_blank">直接打开视频</a>
-                                </p>
-                            `;
-                        } else {
-                            showError('任务完成但未返回视频 URL');
-                        }
-                        resetAfterDone();
-                        return;
-                    }
-
-                    if (status === 'failed') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        const errMsg = task.error_message || data.agnes_response?.error?.message || '生成失败，请稍后重试';
-                        showError(errMsg);
-                        resetAfterDone();
-                        return;
-                    }
-
-                    // 其他状态继续
-                    statusDisplay.textContent = status || 'processing';
-
-                } catch (err) {
-                    console.warn('轮询异常:', err);
-                }
-            }
-
-            // ----- 辅助 -----
             function showError(msg) {
                 errorDisplay.textContent = `❌ ${msg}`;
                 errorDisplay.style.display = 'block';
@@ -1168,7 +959,6 @@
                 isGenerating = false;
                 generateBtn.disabled = false;
                 generateBtn.innerHTML = '<i class="fas fa-play"></i> 生成视频';
-                pendingTaskInfo = null; // 清空进行中的任务信息
                 if (pollInterval) {
                     clearInterval(pollInterval);
                     pollInterval = null;
@@ -1179,7 +969,6 @@
                 if (pollInterval) clearInterval(pollInterval);
             });
 
-            // ----- 检查任务状态 -----
             checkTaskBtn.addEventListener('click', async function() {
                 checkTaskBtn.disabled = true;
                 checkTaskBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检查中...';
@@ -1188,27 +977,47 @@
                 errorDisplay.style.display = 'none';
                 
                 try {
-                    // 调用后端API检查任务状态
-                    const resp = await fetch('/api/video/task/check');
-                    const data = await resp.json();
-                    
-                    if (data.success && data.has_pending_task) {
-                        const task = data.task;
-                        statusDisplay.textContent = '有任务进行中';
-                        taskIdDisplay.textContent = task.task_id || '—';
-                        errorDisplay.innerHTML = `
-                            <div style="background: rgba(42,157,255,0.15); padding: 12px; border-radius: 8px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">⚠️ 有任务正在进行中</div>
-                                <div style="font-size: 13px;">
-                                    <p>任务 ID: ${task.task_id}</p>
-                                    <p>提示词: ${(task.prompt || '').substring(0, 50)}...</p>
-                                </div>
-                            </div>
-                        `;
-                        errorDisplay.style.display = 'block';
+                    const savedTaskId = sessionStorage.getItem('pending_task_id');
+                    if (savedTaskId) {
+                        const resp = await fetch(`/api/videos/${savedTaskId}`, {
+                            headers: getAuthHeaders(),
+                        });
+                        
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            taskIdDisplay.textContent = savedTaskId;
+                            statusDisplay.textContent = data.status;
+                            
+                            if (data.status === 'pending' || data.status === 'processing') {
+                                errorDisplay.innerHTML = `
+                                    <div style="background: rgba(42,157,255,0.15); padding: 12px; border-radius: 8px;">
+                                        <div style="font-weight: 600; margin-bottom: 6px;">⚠️ 有任务正在进行中</div>
+                                        <div style="font-size: 13px;">
+                                            <p>任务 ID: ${savedTaskId}</p>
+                                            <p>状态: ${data.status}</p>
+                                        </div>
+                                    </div>
+                                `;
+                                errorDisplay.style.display = 'block';
+                                
+                                if (pollInterval) clearInterval(pollInterval);
+                                pollInterval = setInterval(() => pollTaskStatus(savedTaskId), 5000);
+                            } else if (data.status === 'completed') {
+                                displayVideoResult(data);
+                                sessionStorage.removeItem('pending_task_id');
+                                sessionStorage.removeItem('idempotency_key');
+                            } else if (data.status === 'failed') {
+                                showError(data.error_message || '任务失败');
+                                sessionStorage.removeItem('pending_task_id');
+                                sessionStorage.removeItem('idempotency_key');
+                            }
+                        } else {
+                            statusDisplay.textContent = '无进行中的任务';
+                            sessionStorage.removeItem('pending_task_id');
+                            sessionStorage.removeItem('idempotency_key');
+                        }
                     } else {
                         statusDisplay.textContent = '无进行中的任务';
-                        errorDisplay.style.display = 'none';
                     }
                 } catch (err) {
                     statusDisplay.textContent = '检查失败';
@@ -1219,15 +1028,8 @@
                 }
             });
 
-            // ----- 强制重试 -----
             forceRetryBtn.addEventListener('click', function() {
-                if (!lastErrorDetail) {
-                    form.dispatchEvent(new Event('submit'));
-                    return;
-                }
-                
-                // 显示确认对话框
-                if (confirm('⚠️ 强制重试可能会继续失败，因为服务繁忙。\n\n建议先点击"检查任务状态"确认队列空闲后再重试。\n\n确定要继续强制重试吗？')) {
+                if (confirm('⚠️ 强制重试可能会继续失败。\n\n建议先点击"检查任务状态"确认队列空闲后再重试。\n\n确定要继续强制重试吗？')) {
                     form.dispatchEvent(new Event('submit'));
                 }
             });
