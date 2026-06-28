@@ -1,0 +1,14 @@
+<?php
+
+use Slowlyo\OwlAdmin\Admin;
+use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Route;
+
+Route::group([
+    'domain'     => Admin::config('admin.route.domain'),
+    'prefix'     => trim(Admin::config('admin.route.prefix') . '/' . Admin::config('admin.iframe_page.route_prefix'), '/'),
+    'middleware' => Admin::config('admin.route.middleware'),
+], function (Router $router) {
+    $router->get('risk-logs', [\App\Admin\Controllers\RiskLogsController::class, 'index']);
+
+});

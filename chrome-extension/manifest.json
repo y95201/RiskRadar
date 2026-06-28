@@ -1,0 +1,45 @@
+{
+    "manifest_version": 3,
+    "name": "OfferGuard",
+    "version": "1.0.0",
+    "description": "跨境电商货源风险监控 - 检测1688商品下架风险和商标侵权",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage"
+    ],
+    "host_permissions": [
+        "*://*.1688.com/*",
+        "http://127.0.0.1:8000/api/*"
+    ],
+    "action": {
+        "default_popup": "popup/popup.html",
+        "default_icon": {
+            "16": "assets/icons/icon16.png",
+            "32": "assets/icons/icon32.png",
+            "48": "assets/icons/icon48.png",
+            "128": "assets/icons/icon128.png"
+        },
+        "default_title": "OfferGuard - 货源风险监控"
+    },
+    "icons": {
+        "16": "assets/icons/icon16.png",
+        "32": "assets/icons/icon32.png",
+        "48": "assets/icons/icon48.png",
+        "128": "assets/icons/icon128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://detail.1688.com/offer/*.html"
+            ],
+            "js": [
+                "content/content_script.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "background": {
+        "service_worker": "background/service_worker.js"
+    }
+}
