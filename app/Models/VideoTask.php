@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['idempotency_key', 'prompt', 'params', 'task_id', 'status', 'video_url', 'error_message'])]
+#[Fillable(['user_id', 'idempotency_key', 'prompt', 'params', 'task_id', 'status', 'video_url', 'error_message'])]
 class VideoTask extends Model
 {
     use HasFactory;
