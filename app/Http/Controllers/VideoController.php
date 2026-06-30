@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\VideoTaskStatus;
+use App\Jobs\GenerateVideoJob;
 use App\Models\VideoTask;
 use Illuminate\Database\QueryException;
-use App\Jobs\GenerateVideoJob;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -105,8 +105,6 @@ class VideoController extends Controller
                 'task_id' => $task->id,
             ], Response::HTTP_CONFLICT);
         }
-
-        GenerateVideoJob::dispatch($task);
 
         $result = $this->generateVideo($task);
 
@@ -347,7 +345,12 @@ class VideoController extends Controller
         
         $path = $file->store('videos/images', $diskName);
         $url = Storage::disk($diskName)->url($path);
-
+        
+        // 如果是相对路径，补全为完整 URL
+        if (str_starts_with($url, '/') || str_starts_with($url, './')) {
+            $url = 'https://' . $request->host() . $url;
+        }
+        dd($url);
         return response()->json([
             'url' => $url,
         ], Response::HTTP_OK);
