@@ -4,7 +4,7 @@
  * @Author: Y95201
  * @Date: 2026-06-29 00:38:41
  * @LastEditors: Y95201
- * @LastEditTime: 2026-07-01 00:10:30
+ * @LastEditTime: 2026-07-01 02:07:40
  */
 
 namespace App\Http\Controllers;
@@ -189,10 +189,15 @@ class VideoController extends Controller
                     break;
             }
 
+            Log::info('Agnes API 请求参数', [
+                'url' => $this->apiBaseUrl . '/v1/videos',
+                'request_body' => $requestBody,
+            ]);
+
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . config('services.agnes.api_key'),
                 'Content-Type' => 'application/json',
-            ])->timeout(60)->post($this->apiBaseUrl . '/v1/videos', $requestBody);
+            ])->timeout(300)->post($this->apiBaseUrl . '/v1/videos', $requestBody);
 
             if (! $response->successful()) {
                 $task->markAsFailed('Agnes API 请求失败: ' . $response->status());
