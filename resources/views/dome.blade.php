@@ -529,6 +529,14 @@
                 return headers;
             }
 
+            function generateUUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
             async function checkPendingTask() {
                 const savedTaskId = sessionStorage.getItem('pending_task_id');
                 const savedKey = sessionStorage.getItem('idempotency_key');
@@ -849,7 +857,7 @@
                 progressFill.style.width = '0%';
                 progressPercent.textContent = '0%';
 
-                const idempotencyKey = crypto.randomUUID();
+                const idempotencyKey = generateUUID();
                 currentIdempotencyKey = idempotencyKey;
 
                 try {
@@ -931,13 +939,19 @@
                     statusDisplay.textContent = data.status;
 
                     if (data.status === 'completed' && data.video_url) {
-                        videoPreview.src = data.video_url;
-                        videoPreview.style.display = 'block';
-                        resultArea.style.display = 'block';
-                        
+                        videoResult.innerHTML = `
+                            <div class="result-video">
+                                <video controls autoplay loop>
+                                    <source src="${data.video_url}" type="video/mp4" />
+                                    您的浏览器不支持视频播放。
+                                </video>
+                            </div>
+                            <p style="margin-top:8px;font-size:14px;color:var(--text2);">
+                                <i class="fas fa-link"></i> <a href="${data.video_url}" target="_blank">直接打开视频</a>
+                            </p>
+                        `;
                         if (data.seconds) {
-                            infoDisplay.textContent = `视频时长: ${data.seconds}秒 | 分辨率: ${data.size || '未知'}`;
-                            infoDisplay.style.display = 'block';
+                            statusDisplay.textContent = `✅ 已完成 (${data.seconds}秒)`;
                         }
                     } else if (data.status === 'failed') {
                         showError(data.error_message || '生成失败');
