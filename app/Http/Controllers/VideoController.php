@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Enums\VideoTaskStatus;
 use App\Models\VideoTask;
 use Illuminate\Database\QueryException;
+use App\Jobs\GenerateVideoJob;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
-use App\Jobs\GenerateVideoJob;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -51,10 +51,13 @@ class VideoController extends Controller
             'image_urls',
         ]);
 
+        // 个人测试模式：使用固定 user_id 或从 token 解析
+        $userId = $this->getCurrentUserId();
+
         try {
             $task = VideoTask::firstOrCreate(
                 [
-                    'user_id' => Auth::user()->id,
+                    'user_id' => $userId,
                     'idempotency_key' => $request->idempotency_key,
                 ],
                 [
@@ -66,7 +69,7 @@ class VideoController extends Controller
         } catch (QueryException $e) {
             if ($this->isUniqueConstraintViolation($e)) {
                 $task = VideoTask::where([
-                    'user_id' => Auth::user()->id,
+                    'user_id' => $userId,
                     'idempotency_key' => $request->idempotency_key,
                 ])->first();
 
@@ -103,11 +106,23 @@ class VideoController extends Controller
             ], Response::HTTP_CONFLICT);
         }
 
-        //GenerateVideoJob::dispatch($task);
+        GenerateVideoJob::dispatch($task);
 
         $result = $this->generateVideo($task);
 
         return response()->json($result, $result['status'] === 'completed' ? Response::HTTP_OK : Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    protected function getCurrentUserId(): int
+    {
+        // 优先尝试从 Sanctum token 获取用户
+        if (Auth::guard('sanctum')->check()) {
+            return Auth::guard('sanctum')->id();
+        }
+
+        // 个人测试模式：如果没有登录，返回 1（假设 user_id=1 是测试账号）
+        // 如果需要切换用户，修改这里或添加 header
+        return 1;
     }
 
     protected function generateVideo(VideoTask $task)
@@ -300,10 +315,7 @@ class VideoController extends Controller
 
     public function show(VideoTask $task)
     {
-        if ($task->user_id !== Auth::user()->id) {
-            return response()->json(['error' => '无权访问此任务'], Response::HTTP_FORBIDDEN);
-        }
-
+        // 个人测试模式：不校验 user_id
         $response = [
             'id' => $task->id,
             'status' => $task->status->value,

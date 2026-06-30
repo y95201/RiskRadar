@@ -4,7 +4,7 @@
  * @Author: Y95201
  * @Date: 2026-06-25 21:25:26
  * @LastEditors: Y95201
- * @LastEditTime: 2026-06-26 17:46:45
+ * @LastEditTime: 2026-06-29 04:13:00
  */
 
 use Illuminate\Http\Request;
@@ -46,12 +46,10 @@ Route::get('/quota/status', [OfferGuardController::class, 'getQuotaStatus']);
 | Video Generation API Routes
 |--------------------------------------------------------------------------
 |
-| 视频生成平台API接口，需要用户登录认证
+| 视频生成平台API接口（个人测试模式，无需认证）
 |
 */
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/videos', [VideoController::class, 'store']);
-    Route::get('/videos/{task}', [VideoController::class, 'show']);
-    Route::post('/videos/upload', [VideoController::class, 'uploadImage']);
-});
+Route::post('/videos', [VideoController::class, 'store']);
+Route::get('/videos/{task}', [VideoController::class, 'show']);
+Route::post('/videos/upload', [VideoController::class, 'uploadImage']);
