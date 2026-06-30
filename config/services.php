@@ -1,4 +1,11 @@
 <?php
+/*
+ * @Description: 
+ * @Author: Y95201
+ * @Date: 2026-05-26 07:11:52
+ * @LastEditors: Y95201
+ * @LastEditTime: 2026-06-30 18:59:16
+ */
 
 return [
 
@@ -36,7 +43,7 @@ return [
     ],
 
     'agnes' => [
-        'api_url' => env('AGNES_API_URL', env('AGNES_API_BASE', 'https://apihub.agnes-ai.com/v1')),
+        'api_url' => env('AGNES_API_BASE', 'https://apihub.agnes-ai.com'),
         'api_key' => env('AGNES_API_KEY'),
     ],
 

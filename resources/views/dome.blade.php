@@ -864,7 +864,7 @@
                         }
                     }
 
-                    statusDisplay.textContent = '提交任务...';
+                    statusDisplay.textContent = '正在生成视频...';
 
                     const requestBody = {
                         prompt: prompt,
@@ -900,29 +900,23 @@
                                 <div style="font-weight: 600; margin-bottom: 6px;">⚠️ ${data.error}</div>
                                 <div style="font-size: 13px;">
                                     <p>任务 ID: ${data.task_id}</p>
+                                    <p>请等待任务完成后再提交新任务</p>
                                 </div>
                             </div>
                         `;
                         errorDisplay.style.display = 'block';
-                        
-                        currentTaskId = data.task_id;
-                        sessionStorage.setItem('pending_task_id', currentTaskId);
-                        sessionStorage.setItem('idempotency_key', idempotencyKey);
-                        
-                        if (pollInterval) clearInterval(pollInterval);
-                        pollInterval = setInterval(() => pollTaskStatus(currentTaskId), 5000);
-                        await pollTaskStatus(currentTaskId);
+                        resetAfterDone();
                         return;
                     }
 
                     if (!resp.ok) {
-                        let errMsg = `创建任务失败 (${resp.status})`;
+                        let errMsg = `视频生成失败 (${resp.status})`;
                         try {
                             const errJson = await resp.json();
                             if (resp.status === 401) {
                                 errMsg = '❌ 请先登录';
                             } else {
-                                errMsg += `: ${errJson.error || JSON.stringify(errJson)}`;
+                                errMsg += `: ${errJson.error || errJson.error_message || JSON.stringify(errJson)}`;
                             }
                         } catch (_) {
                             const errText = await resp.text();
@@ -934,14 +928,20 @@
                     const data = await resp.json();
                     currentTaskId = data.task_id;
                     taskIdDisplay.textContent = currentTaskId;
-                    statusDisplay.textContent = '已提交';
+                    statusDisplay.textContent = data.status;
 
-                    sessionStorage.setItem('pending_task_id', currentTaskId);
-                    sessionStorage.setItem('idempotency_key', idempotencyKey);
-
-                    if (pollInterval) clearInterval(pollInterval);
-                    pollInterval = setInterval(() => pollTaskStatus(currentTaskId), 5000);
-                    await pollTaskStatus(currentTaskId);
+                    if (data.status === 'completed' && data.video_url) {
+                        videoPreview.src = data.video_url;
+                        videoPreview.style.display = 'block';
+                        resultArea.style.display = 'block';
+                        
+                        if (data.seconds) {
+                            infoDisplay.textContent = `视频时长: ${data.seconds}秒 | 分辨率: ${data.size || '未知'}`;
+                            infoDisplay.style.display = 'block';
+                        }
+                    } else if (data.status === 'failed') {
+                        showError(data.error_message || '生成失败');
+                    }
 
                 } catch (err) {
                     console.error(err);
