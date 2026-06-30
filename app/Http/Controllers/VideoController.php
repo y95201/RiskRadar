@@ -4,7 +4,7 @@
  * @Author: Y95201
  * @Date: 2026-06-29 00:38:41
  * @LastEditors: Y95201
- * @LastEditTime: 2026-06-30 22:48:56
+ * @LastEditTime: 2026-07-01 00:10:30
  */
 
 namespace App\Http\Controllers;
@@ -192,7 +192,7 @@ class VideoController extends Controller
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . config('services.agnes.api_key'),
                 'Content-Type' => 'application/json',
-            ])->timeout(60)->post($this->apiBaseUrl . '/videos', $requestBody);
+            ])->timeout(60)->post($this->apiBaseUrl . '/v1/videos', $requestBody);
 
             if (! $response->successful()) {
                 $task->markAsFailed('Agnes API 请求失败: ' . $response->status());
