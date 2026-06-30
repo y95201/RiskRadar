@@ -4,7 +4,7 @@
  * @Author: Y95201
  * @Date: 2026-06-29 00:38:41
  * @LastEditors: Y95201
- * @LastEditTime: 2026-07-01 02:07:40
+ * @LastEditTime: 2026-07-01 05:00:45
  */
 
 namespace App\Http\Controllers;
@@ -12,7 +12,7 @@ namespace App\Http\Controllers;
 use App\Enums\VideoTaskStatus;
 use App\Jobs\GenerateVideoJob;
 use App\Models\VideoTask;
-use Illuminate\Database\QueryException;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -58,60 +58,50 @@ class VideoController extends Controller
             'image_urls',
         ]);
 
-        // 个人测试模式：使用固定 user_id 或从 token 解析
         $userId = $this->getCurrentUserId();
 
-        try {
-            $task = VideoTask::firstOrCreate(
-                [
-                    'user_id' => $userId,
-                    'idempotency_key' => $request->idempotency_key,
-                ],
-                [
-                    'prompt' => $request->prompt,
-                    'params' => $params,
-                    'status' => VideoTaskStatus::Pending,
-                ]
-            );
-        } catch (QueryException $e) {
-            if ($this->isUniqueConstraintViolation($e)) {
-                $task = VideoTask::where([
-                    'user_id' => $userId,
-                    'idempotency_key' => $request->idempotency_key,
-                ])->first();
+        $task = VideoTask::where([
+            'user_id' => $userId,
+            'idempotency_key' => $request->idempotency_key,
+        ])->first();
 
-                if (! $task) {
-                    return response()->json(['error' => '创建任务失败'], Response::HTTP_INTERNAL_SERVER_ERROR);
-                }
-            } else {
-                throw $e;
+        if ($task) {
+            if ($task->status === VideoTaskStatus::Processing) {
+                return response()->json([
+                    'error' => '任务正在处理中，请勿重复提交',
+                    'task_id' => $task->id,
+                ], Response::HTTP_CONFLICT);
+            }
+
+            if ($task->status === VideoTaskStatus::Completed) {
+                return response()->json([
+                    'id' => $task->id,
+                    'status' => $task->status->value,
+                    'video_url' => $task->video_url,
+                    'created_at' => $task->created_at,
+                ], Response::HTTP_OK);
+            }
+
+            if ($task->status === VideoTaskStatus::Failed) {
+                return response()->json([
+                    'id' => $task->id,
+                    'status' => $task->status->value,
+                    'error_message' => $task->error_message,
+                    'created_at' => $task->created_at,
+                ], Response::HTTP_OK);
             }
         }
 
-        if ($task->status === VideoTaskStatus::Completed) {
-            return response()->json([
-                'id' => $task->id,
-                'status' => $task->status->value,
-                'video_url' => $task->video_url,
-                'created_at' => $task->created_at,
-            ], Response::HTTP_OK);
-        }
+        $task = VideoTask::create([
+            'user_id' => $userId,
+            'idempotency_key' => $request->idempotency_key,
+            'prompt' => $request->prompt,
+            'params' => $params,
+            'status' => VideoTaskStatus::Pending,
+        ]);
 
-        if ($task->status === VideoTaskStatus::Failed) {
-            return response()->json([
-                'id' => $task->id,
-                'status' => $task->status->value,
-                'error_message' => $task->error_message,
-                'created_at' => $task->created_at,
-            ], Response::HTTP_OK);
-        }
-
-        if ($task->status === VideoTaskStatus::Processing) {
-            return response()->json([
-                'error' => '任务正在处理中，请勿重复提交',
-                'task_id' => $task->id,
-            ], Response::HTTP_CONFLICT);
-        }
+        $task->status = VideoTaskStatus::Processing;
+        $task->save();
 
         $result = $this->generateVideo($task);
 
@@ -364,10 +354,4 @@ class VideoController extends Controller
         ], Response::HTTP_OK);
     }
 
-    protected function isUniqueConstraintViolation(QueryException $e): bool
-    {
-        $errorCode = $e->getCode();
-
-        return in_array($errorCode, ['23000', '23505', '1062'], true);
-    }
 }
