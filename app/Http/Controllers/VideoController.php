@@ -1,4 +1,11 @@
 <?php
+/*
+ * @Description: 
+ * @Author: Y95201
+ * @Date: 2026-06-29 00:38:41
+ * @LastEditors: Y95201
+ * @LastEditTime: 2026-06-30 22:48:56
+ */
 
 namespace App\Http\Controllers;
 
@@ -338,19 +345,15 @@ class VideoController extends Controller
 
         $file = $request->file('image');
         
-        $diskName = config('filesystems.default');
+        // 优先使用 S3，否则使用 public disk
+        $diskName = 'public';
         if (env('AWS_BUCKET') && env('AWS_ACCESS_KEY_ID')) {
             $diskName = 's3';
         }
         
         $path = $file->store('videos/images', $diskName);
         $url = Storage::disk($diskName)->url($path);
-        
-        // 如果是相对路径，补全为完整 URL
-        if (str_starts_with($url, '/') || str_starts_with($url, './')) {
-            $url = 'https://' . $request->host() . $url;
-        }
-        dd($url);
+
         return response()->json([
             'url' => $url,
         ], Response::HTTP_OK);
