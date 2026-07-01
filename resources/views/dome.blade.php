@@ -449,12 +449,12 @@
 
             <!-- 尺寸 & 帧数 -->
             <div class="row">
-                <div class="field">
-                    <label>宽度</label>
+                <div class="field" id="widthField">
+                    <label>宽度 (仅文生视频)</label>
                     <input type="number" id="width" value="1152" min="256" max="1920" />
                 </div>
-                <div class="field">
-                    <label>高度</label>
+                <div class="field" id="heightField">
+                    <label>高度 (仅文生视频)</label>
                     <input type="number" id="height" value="768" min="256" max="1920" />
                 </div>
                 <div class="field">
@@ -767,6 +767,10 @@
 
             function updateModeUI() {
                 const mode = modeSelect.value;
+                const showSizeFields = mode === 't2v';
+                widthInput.parentElement.style.display = showSizeFields ? '' : 'none';
+                heightInput.parentElement.style.display = showSizeFields ? '' : 'none';
+
                 if (mode === 't2v') {
                     imageLabel.innerHTML = '图片 (文生视频模式不需要)';
                     imageInput.disabled = true;
@@ -940,17 +944,17 @@
                     }
 
                     if (!resp.ok) {
+                        const errText = await resp.text();
                         let errMsg = `视频生成失败 (${resp.status})`;
                         try {
-                            const errJson = await resp.json();
+                            const errJson = JSON.parse(errText);
                             if (resp.status === 401) {
                                 errMsg = '❌ 请先登录';
                             } else {
-                                errMsg += `: ${errJson.error || errJson.error_message || JSON.stringify(errJson)}`;
+                                errMsg += `: ${errJson.error || errJson.error_message || errText}`;
                             }
                         } catch (_) {
-                            const errText = await resp.text();
-                            errMsg += `: ${errText}`;
+                            errMsg += `: ${errText.substring(0, 200)}`;
                         }
                         throw new Error(errMsg);
                     }

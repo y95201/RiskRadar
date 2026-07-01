@@ -15,22 +15,23 @@ class VideoController extends Controller
 {
     private const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
     private const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
-    private const AGNES_TIMEOUT = 300;
     private const AGNES_ENDPOINT = '/v1/videos';
 
     private Client $httpClient;
     private string $apiKey;
     private string $apiBase;
     private string $videoModel;
+    private int $agnesTimeout;
 
     public function __construct()
     {
         $this->apiKey = env('AGNES_API_KEY', '');
         $this->apiBase = env('AGNES_API_BASE', '');
         $this->videoModel = env('AGNES_VIDEO_MODEL', 'agnes-video-v2.0');
+        $this->agnesTimeout = (int) env('AGNES_TIMEOUT', 300);
 
         $this->httpClient = new Client([
-            'timeout' => self::AGNES_TIMEOUT,
+            'timeout' => $this->agnesTimeout,
             'connect_timeout' => 30,
             'verify' => false,
             'http_errors' => false,
@@ -66,6 +67,8 @@ class VideoController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        set_time_limit($this->agnesTimeout + 10);
+
         $request->validate([
             'model' => 'nullable|string',
             'prompt' => 'required|string',
@@ -173,21 +176,34 @@ class VideoController extends Controller
 
     private function buildAgnesPayload(Request $request): array
     {
+        $mode = $request->input('mode', 'i2v');
+
         $payload = [
             'model' => $request->input('model', $this->videoModel),
             'prompt' => $request->input('prompt'),
         ];
 
-        if ($request->has('image')) {
+        if ($mode === 't2v') {
+            $payload['width'] = (int) $request->input('width', 1152);
+            $payload['height'] = (int) $request->input('height', 768);
+        } elseif ($mode === 'i2v' && $request->has('image')) {
             $image = $request->input('image');
             if (!str_starts_with($image, 'http')) {
                 $image = $request->getSchemeAndHttpHost() . $image;
             }
             $payload['image'] = $image;
-        }
+        } elseif (in_array($mode, ['multi', 'keyframes'], true) && $request->has('image_urls')) {
+            $imageUrls = array_map(function ($url) use ($request) {
+                if (!str_starts_with($url, 'http')) {
+                    return $request->getSchemeAndHttpHost() . $url;
+                }
+                return $url;
+            }, $request->input('image_urls'));
 
-        if ($request->has('image_urls')) {
-            $payload['image_urls'] = $request->input('image_urls');
+            $payload['extra_body'] = ['image' => $imageUrls];
+            if ($mode === 'keyframes') {
+                $payload['extra_body']['mode'] = 'keyframes';
+            }
         }
 
         if ($request->has('num_frames')) {
