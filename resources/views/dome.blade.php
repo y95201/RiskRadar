@@ -217,6 +217,42 @@
             border-color: #2a9dff !important;
             color: #fff !important;
         }
+        .btn-info {
+            background: #4a9eff;
+            border-color: #4a9eff;
+            color: #fff;
+        }
+        .btn-info:hover {
+            background: #6db5ff;
+        }
+        .btn-danger {
+            background: #ff6b4a;
+            border-color: #ff6b4a;
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #ff8a6f;
+        }
+        .template-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .duration-btn {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .info-banner {
+            background: rgba(42, 157, 255, 0.15);
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .info-banner-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .info-banner-body {
+            font-size: 13px;
+        }
 
         .status-bar {
             margin-top: 16px;
@@ -309,7 +345,7 @@
                 <i class="fas fa-cloud-upload-alt" style="margin-right:8px;"></i>
                 上传图片 + 输入提示词，调用 Agnes-Video-V2.0 生成视频
                 <span style="display:inline-block;margin-left:16px;font-size:13px;color:var(--text2);">
-                    <i class="fas fa-info-circle"></i> 图片会转为 Base64 发送
+                    <i class="fas fa-info-circle"></i> 图片上传到服务器后生成 URL
                 </span>
             </div>
         </header>
@@ -330,7 +366,7 @@
                 </div>
                 <div class="field">
                     <label>模型</label>
-                    <input value="agnes-video-v2.0" disabled style="opacity:0.7;" />
+                    <input id="model" value="agnes-video-v2.0" disabled style="opacity:0.7;" />
                 </div>
             </div>
 
@@ -355,16 +391,16 @@
                     <div style="margin-top: 10px;">
                         <div style="font-size: 13px; color: var(--text2); margin-bottom: 6px;">📋 推荐提示词模板：</div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-secondary prompt-template-btn" data-template="t2v" style="padding: 6px 12px; font-size: 12px;">
+                            <button type="button" class="btn btn-secondary prompt-template-btn template-btn" data-template="t2v">
                                 🎬 电影风格
                             </button>
-                            <button type="button" class="btn btn-secondary prompt-template-btn" data-template="i2v" style="padding: 6px 12px; font-size: 12px;">
+                            <button type="button" class="btn btn-secondary prompt-template-btn template-btn" data-template="i2v">
                                 ✨ 人物动起来
                             </button>
-                            <button type="button" class="btn btn-secondary prompt-template-btn" data-template="multi" style="padding: 6px 12px; font-size: 12px;">
+                            <button type="button" class="btn btn-secondary prompt-template-btn template-btn" data-template="multi">
                                 🔄 图片转换
                             </button>
-                            <button type="button" class="btn btn-secondary prompt-template-btn" data-template="keyframes" style="padding: 6px 12px; font-size: 12px;">
+                            <button type="button" class="btn btn-secondary prompt-template-btn template-btn" data-template="keyframes">
                                 🎯 关键帧过渡
                             </button>
                         </div>
@@ -385,16 +421,16 @@
                 <div class="field full">
                     <label>视频时长 (快速选择)</label>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button type="button" class="btn btn-secondary duration-btn" data-frames="81" data-rate="24" style="padding: 8px 16px; font-size: 14px;">
+                        <button type="button" class="btn btn-secondary duration-btn" data-frames="81" data-rate="24">
                             ~3秒 (81帧/24fps)
                         </button>
-                        <button type="button" class="btn btn-secondary duration-btn" data-frames="121" data-rate="24" style="padding: 8px 16px; font-size: 14px;">
+                        <button type="button" class="btn btn-secondary duration-btn" data-frames="121" data-rate="24">
                             ~5秒 (121帧/24fps)
                         </button>
-                        <button type="button" class="btn btn-secondary duration-btn" data-frames="241" data-rate="24" style="padding: 8px 16px; font-size: 14px;">
+                        <button type="button" class="btn btn-secondary duration-btn" data-frames="241" data-rate="24">
                             ~10秒 (241帧/24fps)
                         </button>
-                        <button type="button" class="btn btn-secondary duration-btn" data-frames="441" data-rate="24" style="padding: 8px 16px; font-size: 14px;">
+                        <button type="button" class="btn btn-secondary duration-btn" data-frames="441" data-rate="24">
                             ~18秒 (441帧/24fps)
                         </button>
                     </div>
@@ -453,10 +489,10 @@
                         <button type="button" class="btn btn-secondary" id="clearBtn">
                             <i class="fas fa-undo-alt"></i> 清空
                         </button>
-                        <button type="button" class="btn btn-secondary" id="checkTaskBtn" style="background: #4a9eff; border-color: #4a9eff;">
+                        <button type="button" class="btn btn-info" id="checkTaskBtn">
                             <i class="fas fa-search"></i> 检查任务状态
                         </button>
-                        <button type="button" class="btn btn-secondary" id="forceRetryBtn" style="background: #ff6b4a; border-color: #ff6b4a;">
+                        <button type="button" class="btn btn-danger" id="forceRetryBtn">
                             <i class="fas fa-bolt"></i> 强制重试
                         </button>
                     </div>
@@ -482,7 +518,7 @@
         </div>
 
         <p style="text-align:center;color:var(--text2);font-size:13px;margin-top:20px;">
-            <i class="fas fa-shield-alt"></i> 你的 API Key 仅存储在本地浏览器，不会上传
+            <i class="fas fa-shield-alt"></i> API Key 存储在服务器端，前端不接触密钥
         </p>
     </div>
 
@@ -500,6 +536,7 @@
             const frameRateInput = document.getElementById('frameRate');
             const inferenceStepsInput = document.getElementById('inferenceSteps');
             const seedInput = document.getElementById('seed');
+            const modelInput = document.getElementById('model');
             const generateBtn = document.getElementById('generateBtn');
             const clearBtn = document.getElementById('clearBtn');
             const checkTaskBtn = document.getElementById('checkTaskBtn');
@@ -537,84 +574,78 @@
                 });
             }
 
+            function clearPendingTask() {
+                sessionStorage.removeItem('pending_task_id');
+                sessionStorage.removeItem('idempotency_key');
+            }
+
+            function startPolling(taskId) {
+                if (pollInterval) clearInterval(pollInterval);
+                pollInterval = setInterval(() => pollTaskStatus(taskId), 5000);
+            }
+
+            function updateProgress(percent) {
+                progressFill.style.width = percent + '%';
+                progressPercent.textContent = percent + '%';
+            }
+
             async function checkPendingTask() {
                 const savedTaskId = sessionStorage.getItem('pending_task_id');
-                const savedKey = sessionStorage.getItem('idempotency_key');
-                
-                if (savedTaskId) {
-                    try {
-                        const resp = await fetch(`/api/videos/${savedTaskId}`, {
-                            headers: getAuthHeaders(),
-                        });
-                        
-                        if (resp.ok) {
-                            const data = await resp.json();
-                            if (data.status === 'pending' || data.status === 'processing') {
-                                currentTaskId = savedTaskId;
-                                currentIdempotencyKey = savedKey;
-                                
-                                resultArea.style.display = 'block';
-                                taskIdDisplay.textContent = currentTaskId;
-                                statusDisplay.textContent = '继续轮询中...';
-                                
-                                generateBtn.disabled = true;
-                                generateBtn.innerHTML = '<i class="fas fa-clock"></i> 等待任务完成...';
-                                isGenerating = true;
-                                
-                                if (pollInterval) clearInterval(pollInterval);
-                                pollInterval = setInterval(() => pollTaskStatus(currentTaskId), 5000);
-                                await pollTaskStatus(currentTaskId);
-                                
-                                return true;
-                            } else if (data.status === 'completed') {
-                                displayVideoResult(data);
-                            } else if (data.status === 'failed') {
-                                showError(data.error_message || '任务失败');
-                            }
-                            
-                            sessionStorage.removeItem('pending_task_id');
-                            sessionStorage.removeItem('idempotency_key');
-                        }
-                    } catch (err) {
-                        console.error('检查任务失败:', err);
+                if (!savedTaskId) return false;
+
+                try {
+                    const resp = await fetch(`/api/videos/${savedTaskId}`, { headers: getAuthHeaders() });
+                    if (!resp.ok) return false;
+
+                    const data = await resp.json();
+                    taskIdDisplay.textContent = savedTaskId;
+
+                    if (data.status === 'pending' || data.status === 'processing') {
+                        currentTaskId = savedTaskId;
+                        currentIdempotencyKey = sessionStorage.getItem('idempotency_key');
+                        resultArea.style.display = 'block';
+                        statusDisplay.textContent = '继续轮询中...';
+                        generateBtn.disabled = true;
+                        generateBtn.innerHTML = '<i class="fas fa-clock"></i> 等待任务完成...';
+                        isGenerating = true;
+                        startPolling(currentTaskId);
+                        await pollTaskStatus(currentTaskId);
+                        return true;
                     }
+
+                    if (data.status === 'completed') {
+                        displayVideoResult(data);
+                    } else if (data.status === 'failed') {
+                        showError(data.error_message || '任务失败');
+                    }
+                    clearPendingTask();
+                } catch (err) {
+                    console.error('检查任务失败:', err);
                 }
                 return false;
             }
 
             async function pollTaskStatus(taskId) {
                 try {
-                    const resp = await fetch(`/api/videos/${taskId}`, {
-                        headers: getAuthHeaders(),
-                    });
-                    
+                    const resp = await fetch(`/api/videos/${taskId}`, { headers: getAuthHeaders() });
                     if (!resp.ok) {
                         statusDisplay.textContent = '查询失败';
                         return;
                     }
-                    
+
                     const data = await resp.json();
-                    const status = data.status;
-                    
-                    statusDisplay.textContent = status;
-                    
-                    if (status === 'completed') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
+                    statusDisplay.textContent = data.status;
+
+                    if (data.status === 'completed') {
                         displayVideoResult(data);
-                        sessionStorage.removeItem('pending_task_id');
-                        sessionStorage.removeItem('idempotency_key');
+                        clearPendingTask();
                         resetAfterDone();
-                    } else if (status === 'failed') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
+                    } else if (data.status === 'failed') {
                         showError(data.error_message || '生成失败');
-                        sessionStorage.removeItem('pending_task_id');
-                        sessionStorage.removeItem('idempotency_key');
+                        clearPendingTask();
                         resetAfterDone();
                     } else {
-                        progressFill.style.width = '50%';
-                        progressPercent.textContent = '50%';
+                        updateProgress(typeof data.progress === 'number' ? data.progress : 50);
                     }
                 } catch (err) {
                     console.error('轮询失败:', err);
@@ -648,6 +679,13 @@
 
             checkPendingTask();
 
+            const promptTemplates = {
+                t2v: 'A cinematic shot with beautiful lighting, realistic motion, high quality',
+                i2v: 'The subject slowly moves with natural motion, cinematic camera movement, realistic details',
+                multi: 'Create a smooth transformation scene between the reference images, cinematic lighting, consistent character identity, natural motion',
+                keyframes: 'Create a smooth transition from the first keyframe to the second keyframe, maintaining character identity, consistent camera angle, and natural motion between scenes'
+            };
+
             document.querySelectorAll('.prompt-template-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const template = this.dataset.template;
@@ -658,17 +696,10 @@
             const durationBtns = document.querySelectorAll('.duration-btn');
             
             function setActiveDuration(btn) {
-                durationBtns.forEach(b => {
-                    b.style.cssText = 'background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 8px 16px; font-size: 14px;';
-                    b.classList.remove('active');
-                });
-                btn.style.cssText = 'background: #2a9dff; border: 1px solid #2a9dff; color: #fff; padding: 8px 16px; font-size: 14px;';
+                durationBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                
-                const frames = btn.dataset.frames;
-                const rate = btn.dataset.rate;
-                document.getElementById('numFrames').value = frames;
-                document.getElementById('frameRate').value = rate;
+                numFramesInput.value = btn.dataset.frames;
+                frameRateInput.value = btn.dataset.rate;
             }
             
             durationBtns.forEach(btn => {
@@ -686,23 +717,16 @@
 
             function updateCustomDuration() {
                 if (!customDurationSlider) return;
-                
+
                 const duration = parseFloat(customDurationSlider.value);
-                const frameRate = 24;
-                const frames = Math.round(duration * frameRate);
-                
-                if (customDurationValue) customDurationValue.textContent = duration.toFixed(1) + '秒';
-                if (customDurationFrames) customDurationFrames.textContent = frames;
-                
-                const numFramesInput = document.getElementById('numFrames');
-                const frameRateInput = document.getElementById('frameRate');
-                if (numFramesInput) numFramesInput.value = frames;
-                if (frameRateInput) frameRateInput.value = frameRate;
-                
-                document.querySelectorAll('.duration-btn').forEach(b => {
-                    b.style.cssText = 'background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 8px 16px; font-size: 14px;';
-                    b.classList.remove('active');
-                });
+                const frames = Math.round(duration * 24);
+
+                customDurationValue.textContent = duration.toFixed(1) + '秒';
+                customDurationFrames.textContent = frames;
+                numFramesInput.value = frames;
+                frameRateInput.value = 24;
+
+                durationBtns.forEach(b => b.classList.remove('active'));
             }
 
             if (customDurationSlider) {
@@ -740,13 +764,6 @@
                 uploadedFiles = files;
                 updatePreview();
             });
-
-            const promptTemplates = {
-                t2v: 'A cinematic shot with beautiful lighting, realistic motion, high quality',
-                i2v: 'The subject slowly moves with natural motion, cinematic camera movement, realistic details',
-                multi: 'Create a smooth transformation scene between the reference images, cinematic lighting, consistent character identity, natural motion',
-                keyframes: 'Create a smooth transition from the first keyframe to the second keyframe, maintaining character identity, consistent camera angle, and natural motion between scenes'
-            };
 
             function updateModeUI() {
                 const mode = modeSelect.value;
@@ -875,13 +892,14 @@
                     statusDisplay.textContent = '正在生成视频...';
 
                     const requestBody = {
+                        model: modelInput.value,
                         prompt: prompt,
                         idempotency_key: idempotencyKey,
                         mode: mode,
                         width: parseInt(widthInput.value) || 1152,
                         height: parseInt(heightInput.value) || 768,
                         num_frames: parseInt(numFramesInput.value) || 121,
-                        frame_rate: parseFloat(frameRateInput.value) || 24,
+                        frame_rate: parseInt(frameRateInput.value) || 24,
                         num_inference_steps: parseInt(inferenceStepsInput.value) || 30,
                     };
 
@@ -892,7 +910,11 @@
                         requestBody.seed = parseInt(seedInput.value);
                     }
                     if (imageUrls.length > 0) {
-                        requestBody.image_urls = imageUrls;
+                        if (mode === 'i2v') {
+                            requestBody.image = imageUrls[0];
+                        } else {
+                            requestBody.image_urls = imageUrls;
+                        }
                     }
 
                     const resp = await fetch('/api/videos', {
@@ -901,12 +923,12 @@
                         body: JSON.stringify(requestBody),
                     });
 
-                    if (resp.status === 409) {
+                    if (resp.status === 429) {
                         const data = await resp.json();
                         errorDisplay.innerHTML = `
-                            <div style="background: rgba(42,157,255,0.15); padding: 12px; border-radius: 8px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">⚠️ ${data.error}</div>
-                                <div style="font-size: 13px;">
+                            <div class="info-banner">
+                                <div class="info-banner-title">⚠️ ${data.error}</div>
+                                <div class="info-banner-body">
                                     <p>任务 ID: ${data.task_id}</p>
                                     <p>请等待任务完成后再提交新任务</p>
                                 </div>
@@ -936,25 +958,21 @@
                     const data = await resp.json();
                     currentTaskId = data.task_id;
                     taskIdDisplay.textContent = currentTaskId;
-                    statusDisplay.textContent = data.status;
+                    statusDisplay.textContent = data.status || 'processing';
+
+                    sessionStorage.setItem('pending_task_id', currentTaskId);
+                    sessionStorage.setItem('idempotency_key', idempotencyKey);
 
                     if (data.status === 'completed' && data.video_url) {
-                        videoResult.innerHTML = `
-                            <div class="result-video">
-                                <video controls autoplay loop>
-                                    <source src="${data.video_url}" type="video/mp4" />
-                                    您的浏览器不支持视频播放。
-                                </video>
-                            </div>
-                            <p style="margin-top:8px;font-size:14px;color:var(--text2);">
-                                <i class="fas fa-link"></i> <a href="${data.video_url}" target="_blank">直接打开视频</a>
-                            </p>
-                        `;
-                        if (data.seconds) {
-                            statusDisplay.textContent = `✅ 已完成 (${data.seconds}秒)`;
-                        }
+                        displayVideoResult(data);
+                        clearPendingTask();
+                        resetAfterDone();
                     } else if (data.status === 'failed') {
                         showError(data.error_message || '生成失败');
+                        clearPendingTask();
+                        resetAfterDone();
+                    } else {
+                        startPolling(currentTaskId);
                     }
 
                 } catch (err) {
@@ -989,49 +1007,43 @@
                 statusDisplay.textContent = '检查任务状态...';
                 resultArea.style.display = 'block';
                 errorDisplay.style.display = 'none';
-                
+
                 try {
                     const savedTaskId = sessionStorage.getItem('pending_task_id');
-                    if (savedTaskId) {
-                        const resp = await fetch(`/api/videos/${savedTaskId}`, {
-                            headers: getAuthHeaders(),
-                        });
-                        
-                        if (resp.ok) {
-                            const data = await resp.json();
-                            taskIdDisplay.textContent = savedTaskId;
-                            statusDisplay.textContent = data.status;
-                            
-                            if (data.status === 'pending' || data.status === 'processing') {
-                                errorDisplay.innerHTML = `
-                                    <div style="background: rgba(42,157,255,0.15); padding: 12px; border-radius: 8px;">
-                                        <div style="font-weight: 600; margin-bottom: 6px;">⚠️ 有任务正在进行中</div>
-                                        <div style="font-size: 13px;">
-                                            <p>任务 ID: ${savedTaskId}</p>
-                                            <p>状态: ${data.status}</p>
-                                        </div>
-                                    </div>
-                                `;
-                                errorDisplay.style.display = 'block';
-                                
-                                if (pollInterval) clearInterval(pollInterval);
-                                pollInterval = setInterval(() => pollTaskStatus(savedTaskId), 5000);
-                            } else if (data.status === 'completed') {
-                                displayVideoResult(data);
-                                sessionStorage.removeItem('pending_task_id');
-                                sessionStorage.removeItem('idempotency_key');
-                            } else if (data.status === 'failed') {
-                                showError(data.error_message || '任务失败');
-                                sessionStorage.removeItem('pending_task_id');
-                                sessionStorage.removeItem('idempotency_key');
-                            }
-                        } else {
-                            statusDisplay.textContent = '无进行中的任务';
-                            sessionStorage.removeItem('pending_task_id');
-                            sessionStorage.removeItem('idempotency_key');
-                        }
-                    } else {
+                    if (!savedTaskId) {
                         statusDisplay.textContent = '无进行中的任务';
+                        return;
+                    }
+
+                    const resp = await fetch(`/api/videos/${savedTaskId}`, { headers: getAuthHeaders() });
+                    if (!resp.ok) {
+                        statusDisplay.textContent = '无进行中的任务';
+                        clearPendingTask();
+                        return;
+                    }
+
+                    const data = await resp.json();
+                    taskIdDisplay.textContent = savedTaskId;
+                    statusDisplay.textContent = data.status;
+
+                    if (data.status === 'pending' || data.status === 'processing') {
+                        errorDisplay.innerHTML = `
+                            <div class="info-banner">
+                                <div class="info-banner-title">⚠️ 有任务正在进行中</div>
+                                <div class="info-banner-body">
+                                    <p>任务 ID: ${savedTaskId}</p>
+                                    <p>状态: ${data.status}</p>
+                                </div>
+                            </div>
+                        `;
+                        errorDisplay.style.display = 'block';
+                        startPolling(savedTaskId);
+                    } else if (data.status === 'completed') {
+                        displayVideoResult(data);
+                        clearPendingTask();
+                    } else if (data.status === 'failed') {
+                        showError(data.error_message || '任务失败');
+                        clearPendingTask();
                     }
                 } catch (err) {
                     statusDisplay.textContent = '检查失败';
@@ -1044,7 +1056,7 @@
 
             forceRetryBtn.addEventListener('click', function() {
                 if (confirm('⚠️ 强制重试可能会继续失败。\n\n建议先点击"检查任务状态"确认队列空闲后再重试。\n\n确定要继续强制重试吗？')) {
-                    form.dispatchEvent(new Event('submit'));
+                    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
                 }
             });
 
