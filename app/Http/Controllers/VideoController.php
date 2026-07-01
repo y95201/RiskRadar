@@ -228,6 +228,7 @@ class VideoController extends Controller
         $status = $statusData['status'] ?? null;
         $videoUrl = $statusData['video_url']
             ?? $statusData['result_url']
+            ?? $statusData['remixed_from_video_id']
             ?? $statusData['url']
             ?? $statusData['video']
             ?? null;
