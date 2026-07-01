@@ -16,6 +16,7 @@ class VideoController extends Controller
     private const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
     private const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
     private const AGNES_ENDPOINT = '/v1/videos';
+    private const AGNES_STATUS_ENDPOINT = '/agnesapi';
 
     private Client $httpClient;
     private string $apiKey;
@@ -142,7 +143,7 @@ class VideoController extends Controller
                 return $this->error($errorMsg, 502, ['original_response' => $data]);
             }
 
-            $agnesTaskId = $data['task_id'] ?? $data['id'] ?? $data['taskId'] ?? '';
+            $agnesTaskId = $data['video_id'] ?? $data['task_id'] ?? $data['id'] ?? $data['taskId'] ?? '';
             $task->markAsProcessing($agnesTaskId);
 
             return response()->json([
@@ -227,7 +228,8 @@ class VideoController extends Controller
         $status = $statusData['status'] ?? null;
         $videoUrl = $statusData['video_url']
             ?? $statusData['result_url']
-            ?? $statusData['remixed_from_video_id']
+            ?? $statusData['url']
+            ?? $statusData['video']
             ?? null;
 
         if (in_array($status, ['completed', 'succeeded'], true) && $videoUrl) {
@@ -248,19 +250,19 @@ class VideoController extends Controller
         }
     }
 
-    private function queryAgnesVideoStatus(string $taskId): ?array
+    private function queryAgnesVideoStatus(string $videoId): ?array
     {
         try {
-            $response = $this->httpClient->get($this->apiBase . self::AGNES_ENDPOINT, [
-                'query' => ['task_id' => $taskId],
+            $response = $this->httpClient->get($this->apiBase . self::AGNES_STATUS_ENDPOINT, [
+                'query' => ['video_id' => $videoId],
                 'headers' => $this->agnesHeaders(acceptOnly: true),
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            Log::info('[VideoAPI] 查询视频状态', ['task_id' => $taskId, 'response' => $data]);
+            Log::info('[VideoAPI] 查询视频状态', ['video_id' => $videoId, 'response' => $data]);
             return $data;
         } catch (GuzzleException $e) {
-            Log::error('[VideoAPI] 查询视频状态失败', ['task_id' => $taskId, 'error' => $e->getMessage()]);
+            Log::error('[VideoAPI] 查询视频状态失败', ['video_id' => $videoId, 'error' => $e->getMessage()]);
             return null;
         }
     }
