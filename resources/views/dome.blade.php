@@ -177,6 +177,42 @@
         .file-preview .preview-item .remove:hover {
             background: #ff4d6a;
         }
+        .file-preview .preview-item .preview-order {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.78);
+            color: #fff;
+            font-size: 11px;
+            text-align: center;
+            padding: 2px 0;
+            font-weight: 600;
+        }
+        .file-preview .preview-item .reorder-btn {
+            position: absolute;
+            top: 4px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .file-preview .preview-item .reorder-left {
+            left: 4px;
+        }
+        .file-preview .preview-item .reorder-right {
+            left: 30px;
+        }
+        .file-preview .preview-item .reorder-btn:hover {
+            background: var(--accent);
+        }
 
         .btn {
             background: var(--accent);
@@ -350,7 +386,7 @@
             </div>
         </header>
 
-        <form id="generationForm" class="card">
+        <form id="generationForm" class="card" novalidate>
             <h2><i class="fas fa-sliders-h"></i> 参数设置</h2>
 
             <!-- 模式 -->
@@ -736,23 +772,39 @@
 
             function updatePreview() {
                 previewContainer.innerHTML = '';
+                const mode = modeSelect.value;
                 uploadedFiles.forEach((file, index) => {
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         const div = document.createElement('div');
                         div.className = 'preview-item';
+                        const orderLabel = mode === 'keyframes' ? `关键帧 ${index + 1}`
+                            : mode === 'multi' ? `图片 ${index + 1}`
+                            : '';
                         div.innerHTML = `
                             <img src="${e.target.result}" alt="预览" />
+                            ${orderLabel ? `<span class="preview-order">${orderLabel}</span>` : ''}
                             <button class="remove" data-index="${index}" title="移除"><i class="fas fa-times"></i></button>
+                            ${index > 0 ? `<button class="reorder-btn reorder-left" data-index="${index}" data-dir="left" title="前移"><i class="fas fa-chevron-left"></i></button>` : ''}
+                            ${index < uploadedFiles.length - 1 ? `<button class="reorder-btn reorder-right" data-index="${index}" data-dir="right" title="后移"><i class="fas fa-chevron-right"></i></button>` : ''}
                         `;
                         previewContainer.appendChild(div);
                         div.querySelector('.remove').addEventListener('click', function() {
                             const idx = parseInt(this.dataset.index);
                             uploadedFiles.splice(idx, 1);
-                            const dt = new DataTransfer();
-                            uploadedFiles.forEach(f => dt.items.add(f));
-                            imageInput.files = dt.files;
                             updatePreview();
+                        });
+                        div.querySelectorAll('.reorder-btn').forEach(btn => {
+                            btn.addEventListener('click', function() {
+                                const idx = parseInt(this.dataset.index);
+                                const dir = this.dataset.dir;
+                                if (dir === 'left' && idx > 0) {
+                                    [uploadedFiles[idx - 1], uploadedFiles[idx]] = [uploadedFiles[idx], uploadedFiles[idx - 1]];
+                                } else if (dir === 'right' && idx < uploadedFiles.length - 1) {
+                                    [uploadedFiles[idx], uploadedFiles[idx + 1]] = [uploadedFiles[idx + 1], uploadedFiles[idx]];
+                                }
+                                updatePreview();
+                            });
                         });
                     };
                     reader.readAsDataURL(file);
@@ -760,8 +812,18 @@
             }
 
             imageInput.addEventListener('change', function() {
-                const files = Array.from(this.files);
-                uploadedFiles = files;
+                const newFiles = Array.from(this.files);
+                newFiles.forEach(newFile => {
+                    const exists = uploadedFiles.some(f =>
+                        f.name === newFile.name &&
+                        f.size === newFile.size &&
+                        f.lastModified === newFile.lastModified
+                    );
+                    if (!exists) {
+                        uploadedFiles.push(newFile);
+                    }
+                });
+                this.value = '';
                 updatePreview();
             });
 
@@ -788,12 +850,12 @@
                         document.getElementById('promptHint').textContent = '描述图片中人物/物体的动作、表情、相机运动等';
                     } else if (mode === 'multi') {
                         imageLabel.innerHTML = '上传多张图片 (多图视频) <span class="required">*</span>';
-                        imageHint.textContent = '请选择多张图片（至少2张），按顺序作为参考帧';
+                        imageHint.textContent = '至少2张图片，可逐张选择添加。用预览图上的箭头按钮调整顺序';
                         promptInput.placeholder = '描述图片之间的转换场景，例如：创建两张图片之间的平滑过渡，电影级光照';
                         document.getElementById('promptHint').textContent = '描述参考图片之间的转换场景、风格一致性、过渡方式';
                     } else if (mode === 'keyframes') {
-                        imageLabel.innerHTML = '上传多张图片 (关键帧动画) <span class="required">*</span>';
-                        imageHint.textContent = '请选择多张图片（至少2张），按顺序作为关键帧';
+                        imageLabel.innerHTML = '上传关键帧图片 <span class="required">*</span>';
+                        imageHint.textContent = '至少2张图片作为关键帧，可逐张选择添加。用箭头按钮调整关键帧顺序（第1帧→第2帧）';
                         promptInput.placeholder = '描述关键帧之间的过渡关系，例如：从第一帧平滑过渡到第二帧，保持角色一致性';
                         document.getElementById('promptHint').textContent = '描述关键帧之间的过渡关系、角色一致性、相机角度、场景过渡';
                     }
